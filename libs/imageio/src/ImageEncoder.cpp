@@ -312,6 +312,7 @@ void PNGEncoder::encode(const Image& image) {
     size_t srcChannels = image.getChannelsCount();
     if ((mFormat == PixelFormat::RGBM && srcChannels != 3) ||
             (srcChannels != 1 && srcChannels != 3)) {
+        std::cerr << "prideout DOH " << srcChannels << " " << (int) mFormat << std::endl;
         return;
     }
 

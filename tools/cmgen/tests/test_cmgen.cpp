@@ -43,30 +43,62 @@ class CmgenTest : public testing::Test {};
 
 static ComparisonMode g_comparisonMode;
 
-TEST_F(CmgenTest, WhiteFurnace) { // NOLINT
+static void checkFileExistence(string path) {
+    std::ifstream s(path.c_str(), std::ios::binary);
+    if (!s) {
+        std::cerr << "ERROR file does not exist: " << path << std::endl;
+        exit(1);
+    }
+}
 
-    Path comparisonPath = "../../samples/envs/white_furnace";
-    Path inputPath = "../../assets/environments/white_furnace/white_furnace.exr";
+static LinearImage toLinearFromRGBM(math::float4 const* src, uint32_t w, uint32_t h) {
+    LinearImage result(w, h, 3);
+    math::float3* dst = reinterpret_cast<math::float3*>(result.getPixelRef());
+    for (uint32_t row = 0; row < h; ++row) {
+        for (uint32_t col = 0; col < w; ++col, ++src, ++dst) {
+            *dst = RGBMtoLinear(*src);
+        }
+    }
+    return result;
+}
 
-    const string resultImageFilename = "white_furnace/nx.rgbm";
-    const string goldenImageFilename = comparisonPath + "nx.rgbm";
+static void spawnTool(string inputPath, string resultPath, string goldenPath) {
+    const string executableFolder = Path::getCurrentExecutable().getParent();
+    inputPath = Path::getCurrentDirectory() + inputPath;
+    resultPath = Path::getCurrentExecutable().getParent() + resultPath;
+    goldenPath = Path::getCurrentDirectory() + goldenPath;
 
-    std::cerr << "Running cmgen on " << inputPath << "...\n";
-    string cmdline = string("tools/cmgen/cmgen -x . ") + inputPath.c_str();
+    std::cout << "Running cmgen on " << inputPath << std::endl;
+    checkFileExistence(inputPath);
+    string cmdline = executableFolder + "cmgen -x " + executableFolder + " " + inputPath;
     ASSERT_EQ(std::system(cmdline.c_str()), 0);
 
-    std::cerr << "Reading result image from " << resultImageFilename << "...\n";
-    std::ifstream resultStream(resultImageFilename.c_str(), std::ios::binary);
-    Image resultImage = ImageDecoder::decode(resultStream, resultImageFilename);
+    std::cout << "Reading result image from " << resultPath << std::endl;
+    checkFileExistence(resultPath);
+    std::ifstream resultStream(resultPath.c_str(), std::ios::binary);
+    Image resultImage = ImageDecoder::decode(resultStream, resultPath);
     ASSERT_EQ(resultImage.isValid(), true);
     ASSERT_EQ(resultImage.getChannelsCount(), 4);
+    LinearImage resultLImage = toLinearFromRGBM(
+            static_cast<math::float4 const*>(resultImage.getData()),
+            resultImage.getWidth(), resultImage.getHeight());
 
-    std::cerr << "Golden image is at " << goldenImageFilename << "\n";
-    LinearImage resultLImage(resultImage.getWidth(), resultImage.getHeight(), 4);
-    memcpy(resultLImage.getPixelRef(), resultImage.getData(),
-            resultImage.getWidth() * resultImage.getHeight() * sizeof(float) * 4);
+    std::cout << "Golden image is at " << goldenPath << std::endl;
+    updateOrCompare(resultLImage, goldenPath, g_comparisonMode, 0.01f);
+}
 
-    updateOrCompare(resultLImage, goldenImageFilename, g_comparisonMode, 0.01f);
+TEST_F(CmgenTest, HdrLatLong) { // NOLINT
+    const string inputPath = "assets/environments/white_furnace/white_furnace.exr";
+    const string resultPath = "white_furnace/nx.rgbm";
+    const string goldenPath = "samples/envs/white_furnace/nx.rgbm";
+    spawnTool(inputPath, resultPath, goldenPath);
+}
+
+TEST_F(CmgenTest, LdrCrossCube) { // NOLINT
+    // const string inputPath = "tools/cmgen/tests/Footballfield/Footballfield.png";
+    // const string resultPath = "Footballfield/m3_nx.rgbm";
+    // const string goldenPath = "tools/cmgen/tests/Footballfield/m3_nx.rgbm";
+    // spawnTool(inputPath, resultPath, goldenPath);
 }
 
 int main(int argc, char** argv) {
