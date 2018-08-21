@@ -7,13 +7,13 @@ cmake_minimum_required(VERSION 3.1)
 # Project declaration
 # ==================================================================================================
 project(TNT)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 # ==================================================================================================
 # Options
 # ==================================================================================================
-
 option(ENABLE_JAVA "Compile Java projects, requires a JDK and the JAVA_HOME env var" ON)
-
+option(PORTABLE_RELEASE "Remove dependencies on libc++ and libgcc for distribution" ON)
 option(USE_EXTERNAL_GLES3 "Experimental: Compile Filament against OpenGL ES 3" OFF)
 
 # ==================================================================================================
@@ -106,12 +106,13 @@ endif()
 
 if (LINUX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    # Required in CI environment with custom libc++ and libc++abi
     if (FILAMENT_REQUIRES_CXXABI)
-        # Required in CI environment with custom libc++ and libc++abi
-        link_libraries("-lc++abi")
+        find_package(libcxxabi REQUIRED)
+        include_directories(${LIBCXXABI_INCLUDE_DIRS} SYSTEM)
+        link_libraries(${LIBCXXABI_LIBRARIES})
     endif()
-    # To distribute our binaries, we must remove the dependency on libc++ and libgcc.
-    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    if (CMAKE_BUILD_TYPE STREQUAL "Release" AND PORTABLE_RELEASE)
         link_libraries("-static-libgcc -static-libstdc++")
     endif()
 else()
